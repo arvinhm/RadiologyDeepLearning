@@ -440,73 +440,86 @@ def efficientnet3d_b7(in_channels, num_classes):
 
 
 # VGG3D
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class Conv3DSame(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1):
+        super(Conv3DSame, self).__init__()
+        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=0)
+        self.stride = stride
+        self.kernel_size = kernel_size
+
+    def forward(self, x):
+        pad_d = max((self.kernel_size[0] - 1) // 2, 0)
+        pad_h = max((self.kernel_size[1] - 1) // 2, 0)
+        pad_w = max((self.kernel_size[2] - 1) // 2, 0)
+        x = F.pad(x, (pad_w, pad_w, pad_h, pad_h, pad_d, pad_d))
+        return self.conv(x)
+
 class VGG3D(nn.Module):
     def __init__(self, in_channels, num_classes):
         super(VGG3D, self).__init__()
         self.features = nn.Sequential(
-            nn.Conv3d(in_channels, 64, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(in_channels, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(64),
             nn.ReLU(inplace=True),
-            nn.Conv3d(64, 64, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(64, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(64),
             nn.ReLU(inplace=True),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+            Conv3DSame(64, 64, kernel_size=(3, 3, 3), stride=(2, 2, 2)),  # Strided conv instead of max pooling
 
-            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(64, 128, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(128),
             nn.ReLU(inplace=True),
-            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(128, 128, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(128),
             nn.ReLU(inplace=True),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+            Conv3DSame(128, 128, kernel_size=(3, 3, 3), stride=(2, 2, 2)),  # Strided conv instead of max pooling
 
-            nn.Conv3d(128, 256, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(128, 256, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(256),
             nn.ReLU(inplace=True),
-            nn.Conv3d(256, 256, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(256, 256, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(256),
             nn.ReLU(inplace=True),
-            nn.Conv3d(256, 256, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(256, 256, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(256),
             nn.ReLU(inplace=True),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+            Conv3DSame(256, 256, kernel_size=(3, 3, 3), stride=(2, 2, 2)),  # Strided conv instead of max pooling
 
-            nn.Conv3d(256, 512, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(256, 512, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(512),
             nn.ReLU(inplace=True),
-            nn.Conv3d(512, 512, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(512),
             nn.ReLU(inplace=True),
-            nn.Conv3d(512, 512, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(512),
             nn.ReLU(inplace=True),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(2, 2, 2)),  # Strided conv instead of max pooling
 
-            nn.Conv3d(512, 512, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(512),
             nn.ReLU(inplace=True),
-            nn.Conv3d(512, 512, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(512),
             nn.ReLU(inplace=True),
-            nn.Conv3d(512, 512, kernel_size=3, stride=1, padding=1),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
             nn.BatchNorm3d(512),
             nn.ReLU(inplace=True),
-            nn.MaxPool3d(kernel_size=2, stride=2),
+            Conv3DSame(512, 512, kernel_size=(3, 3, 3), stride=(2, 2, 2)),  # Strided conv instead of max pooling
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 1 * 7 * 7, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, num_classes),
+            nn.AdaptiveAvgPool3d((1, 1, 1)),
+            nn.Flatten(),
+            nn.Linear(512, num_classes)
         )
 
     def forward(self, x):
         x = self.features(x)
-        x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
 
@@ -558,7 +571,7 @@ class ResNeXt3D(nn.Module):
                 new_module = nn.AdaptiveAvgPool3d(output_size=(module.output_size[0], module.output_size[0], module.output_size[0]))
                 replace_dict[name] = new_module
 
-        # Apply the replacements
+
         for name, new_module in replace_dict.items():
             self._set_module_by_name(name, new_module)
 
@@ -585,7 +598,6 @@ class ViT3D(nn.Module):
         self.model.patch_embed.proj = nn.Conv3d(in_channels, self.model.embed_dim, kernel_size=(16, 16, 16), stride=(16, 16, 16))
         self.model.head = nn.Linear(self.model.head.in_features, num_classes)
         
-        # Update all layers to support 3D inputs
         for block in self.model.blocks:
             block.attn.qkv = nn.Linear(block.attn.qkv.in_features, block.attn.qkv.out_features)
             block.attn.proj = nn.Linear(block.attn.proj.in_features, block.attn.proj.out_features)
@@ -607,9 +619,6 @@ def vit3d(in_channels, num_classes):
     return ViT3D(in_channels, num_classes)
 
 
-
-
-# Helper function to list available models in timm
 def list_available_timm_models():
     model_names = timm.list_models(pretrained=True)
     print("Available models in timm:")
