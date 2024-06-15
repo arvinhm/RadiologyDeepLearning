@@ -116,6 +116,19 @@ class ResNet3D(nn.Module):
         x = self.fc(x)
         return x
 
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
 def resnet18_3d(in_channels, num_classes):
     return ResNet3D(BasicBlock3D, [2, 2, 2, 2], in_channels, num_classes)
 
@@ -215,6 +228,7 @@ class DenseNet3D(nn.Module):
         out = self.classifier(out)
         return out
 
+
 def densenet121_3d(in_channels, num_classes):
     return DenseNet3D(32, (6, 12, 24, 16), 64, 4, 0, in_channels, num_classes)
 
@@ -280,13 +294,9 @@ class MobileNet3D(nn.Module):
         super(MobileNet3D, self).__init__()
         self.in_channels = in_channels
         self.model = timm.create_model('mobilenetv2_100', pretrained=True)
-        # Adjust the initial conv layer to handle 3D input
         self.model.conv_stem = nn.Conv3d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        # Adjust batch normalization layers
         self.model.bn1 = nn.BatchNorm3d(32)
-        # Replace any 2D layers to handle 3D
         self._replace_2d_with_3d()
-        # Adjust classifier for the number of output classes
         self.model.classifier = nn.Sequential(
             nn.Dropout(p=0.2),
             nn.Linear(self._get_classifier_input_features(), num_classes),
@@ -571,7 +581,7 @@ class ResNeXt3D(nn.Module):
                 new_module = nn.AdaptiveAvgPool3d(output_size=(module.output_size[0], module.output_size[0], module.output_size[0]))
                 replace_dict[name] = new_module
 
-
+        # Apply the replacements
         for name, new_module in replace_dict.items():
             self._set_module_by_name(name, new_module)
 
@@ -592,12 +602,15 @@ def resnext3d(in_channels, num_classes):
 # ViT3D
 
 class ViT3D(nn.Module):
-    def __init__(self, in_channels, num_classes):
+    def __init__(self, in_channels, num_classes, patch_size=(16, 16, 16)):
         super(ViT3D, self).__init__()
         self.model = timm.create_model('vit_base_patch16_224', pretrained=True)
-        self.model.patch_embed.proj = nn.Conv3d(in_channels, self.model.embed_dim, kernel_size=(16, 16, 16), stride=(16, 16, 16))
+        self.model.patch_embed.proj = nn.Conv3d(in_channels, self.model.embed_dim, kernel_size=patch_size, stride=patch_size)
+        num_patches = (112 // patch_size[0]) * (112 // patch_size[1]) * (112 // patch_size[2])
+        self.model.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.model.embed_dim))
         self.model.head = nn.Linear(self.model.head.in_features, num_classes)
         
+        # Update all layers to support 3D inputs
         for block in self.model.blocks:
             block.attn.qkv = nn.Linear(block.attn.qkv.in_features, block.attn.qkv.out_features)
             block.attn.proj = nn.Linear(block.attn.proj.in_features, block.attn.proj.out_features)
@@ -619,6 +632,9 @@ def vit3d(in_channels, num_classes):
     return ViT3D(in_channels, num_classes)
 
 
+
+
+# Helper function to list available models in timm
 def list_available_timm_models():
     model_names = timm.list_models(pretrained=True)
     print("Available models in timm:")
